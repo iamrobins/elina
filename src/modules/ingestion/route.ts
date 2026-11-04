@@ -3,10 +3,11 @@ import { create, fromBinary, fromJsonString, toBinary, toJsonString } from "@buf
 import { eq, isNull, and } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../../db/client";
-import { apiKeys } from "../../db/schema";
+import { apiKeys, modelPrices } from "../../db/schema";
 import { ExportTraceServiceRequestSchema, ExportTraceServiceResponseSchema } from "../../gen/opentelemetry/proto/collector/trace/v1/trace_service_pb";
 import { StatusSchema } from "../../gen/google/rpc/status_pb";
 import { normalize } from "./normalize";
+import { priceSpan } from "./pricing";
 import { persist } from "./repository";
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -87,6 +88,8 @@ ingestionRoutes.post("/v1/traces", async (c) => {
 
   try {
     const dbStarted = performance.now();
+    const prices = await db.select().from(modelPrices).where(eq(modelPrices.projectId, projectId));
+    for (const span of batch.spans) priceSpan(span, prices);
     const inserted = await persist(batch);
     console.log(JSON.stringify({ event: "ingest_complete", requestId, projectId, spanCount: inserted, duplicateCount: batch.spans.length - inserted, dbMs: Math.round(performance.now() - dbStarted), durationMs: Math.round(performance.now() - started), status: 200 }));
   } catch (error) {

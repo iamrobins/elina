@@ -10,8 +10,10 @@ Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSW
 
 - `POST /api/projects` with `{"name":"my-app","retentionDays":30}` returns the project and its write key once.
 - `GET /api/projects` lists projects.
+- `GET /api/prices/catalog` returns the version and model prices bundled with this build.
 - `POST /api/projects/:id/keys` issues another write key.
 - `DELETE /api/keys/:id` revokes a write key.
+- `GET /api/projects/:id/prices` lists project model prices. `PUT` to the same path with `provider`, exact `model`, `inputPerMillion`, `outputPerMillion`, and optional `cachedInputPerMillion` adds or updates one. `DELETE` with `provider` and `model` removes it. Rates are USD per million tokens and apply to new spans.
 
 Send OTLP/HTTP traces to `POST /v1/traces` with `Authorization: Bearer <writeKey>`. Protobuf and OTLP JSON, including gzip, are accepted. A 200 response follows a committed PostgreSQL transaction.
 
@@ -23,7 +25,7 @@ Admin trace reads require `projectId` even with the admin token:
 - `GET /api/traces/:traceId?projectId=<uuid>` returns a trace and its flat span list.
 - `GET /api/metrics/summary?projectId=<uuid>&from=<ISO>&to=<ISO>` returns trace/error counts, error rate, p50/p95 end-to-end trace latency in milliseconds, token totals, known USD cost, and the count of usage spans with unknown cost. Empty time bounds include all stored data.
 
-Reported USD cost attributes (`gen_ai.usage.cost_usd`, `elinaobs.cost.usd`, or `tinyobs.cost.usd`) are stored as decimal values. Unknown cost remains null; model-price estimates await a versioned, verified price table.
+Reported USD cost attributes (`gen_ai.usage.cost_usd`, `elinaobs.cost.usd`, or `tinyobs.cost.usd`) take priority. Otherwise Elina estimates cost from provider token counts and an exact project price or its versioned built-in standard-price snapshot. The snapshot includes OpenAI (`gpt-6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`), Gemini Developer API (`gemini-3-flash-preview`, `gemini-3.1-pro-preview`, `gemini-2.5-flash`), and Anthropic (`claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-opus-4-5-20251101`). Use `gen_ai.provider.name` values `openai`, `gcp.gemini`, or `anthropic` and the exact model ID. Rates come from the [OpenAI](https://developers.openai.com/api/docs/pricing), [Gemini](https://aistudio.google.com/docs/pricing), and [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) standard paid pricing pages. The snapshot is bundled with each server build; updating bundled rates requires a new build, while project overrides can be edited in Settings without one. Cached input is priced separately when reported. Unsupported models, nonstandard service tiers, long-context requests with different rates, and incomplete usage remain unknown. Token estimates exclude separately billed audio, tools, cache storage, and cloud platform premiums. Each stored span keeps its cost source; later price edits do not change existing spans. The first pricing migration backfills eligible existing spans once.
 
 Retention runs at API startup and every 24 hours. It deletes traces older than each project's `retentionDays` in batches of 500; span rows cascade. A manual pass is `docker compose exec api bun src/db/retention.ts`. Database backups need a separate retention policy.
 

@@ -21,6 +21,16 @@ export const apiKeys = pgTable("api_keys", {
   revokedAt: time("revoked_at"),
 });
 
+export const modelPrices = pgTable("model_prices", {
+  projectId: uuid("project_id").notNull().references(() => projects.id),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  inputPerMillion: numeric("input_per_million", { precision: 12, scale: 6 }).notNull(),
+  outputPerMillion: numeric("output_per_million", { precision: 12, scale: 6 }).notNull(),
+  cachedInputPerMillion: numeric("cached_input_per_million", { precision: 12, scale: 6 }),
+  updatedAt: time("updated_at").defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.projectId, table.provider, table.model] })]);
+
 export const traces = pgTable("traces", {
   projectId: uuid("project_id").notNull().references(() => projects.id),
   traceId: char("trace_id", { length: 32 }).notNull(),

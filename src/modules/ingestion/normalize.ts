@@ -49,7 +49,6 @@ function token(attrs: Record<string, unknown>, keys: string[]) {
 }
 
 function reportedCost(attrs: Record<string, unknown>) {
-  // shortcut: unknown models keep null cost until a versioned price table is approved.
   for (const key of ["gen_ai.usage.cost_usd", "elinaobs.cost.usd", "tinyobs.cost.usd"]) {
     const value = scalar(attrs, key);
     if (value === undefined) continue;
@@ -87,7 +86,7 @@ export function normalize(request: ExportTraceServiceRequest, projectId: string)
         const links = span.links.map((link) => ({ traceId: id(link.traceId, 16), spanId: id(link.spanId, 8), attributes: attributes(link.attributes) }));
         const status = span.status?.code === Status_StatusCode.ERROR ? "error" : span.status?.code === Status_StatusCode.OK ? "ok" : "unset";
         const type = scalar(attrs, "elinaobs.observation.type") ?? scalar(attrs, "tinyobs.observation.type") ?? "span";
-        const model = scalar(attrs, "gen_ai.request.model") ?? scalar(attrs, "gen_ai.response.model");
+        const model = scalar(attrs, "gen_ai.response.model") ?? scalar(attrs, "gen_ai.request.model");
         const provider = scalar(attrs, "gen_ai.provider.name") ?? scalar(attrs, "gen_ai.system");
         const costUsd = reportedCost(attrs);
         spans.push({
