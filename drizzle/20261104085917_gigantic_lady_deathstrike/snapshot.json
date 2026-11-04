@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "d5948bc2-4616-4800-bfa7-a5e5b5800e2b",
+  "prevIds": [
+    "4633cdef-5725-40d2-85fe-f65178a6e239"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "spans",
+        "links"
+      ],
+      "writes": [
+        "s|col|public.spans.links",
+        "n|col|public.spans.links",
+        "e|col|public.spans.links"
+      ],
+      "reads": [
+        "n|tbl|public.spans",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "spans",
+        "name": "links",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'[]'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

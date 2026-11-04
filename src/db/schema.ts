@@ -59,6 +59,7 @@ export const spans = pgTable("spans", {
   resourceAttributes: jsonb("resource_attributes").notNull().default({}),
   scope: jsonb("scope").notNull().default({}),
   events: jsonb("events").notNull().default([]),
+  links: jsonb("links").notNull().default([]),
   createdAt: time("created_at").defaultNow().notNull(),
 }, (table) => [
   primaryKey({ columns: [table.projectId, table.traceId, table.spanId] }),

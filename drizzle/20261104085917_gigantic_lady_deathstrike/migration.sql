@@ -1,0 +1,1 @@
+ALTER TABLE "spans" ADD COLUMN "links" jsonb DEFAULT '[]' NOT NULL;
