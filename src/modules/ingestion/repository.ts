@@ -4,7 +4,8 @@ import { spans, traces } from "../../db/schema";
 import { normalize } from "./normalize";
 
 export async function persist(batch: ReturnType<typeof normalize>) {
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    let inserted = 0;
     for (const trace of batch.traces) {
       await tx.insert(traces).values(trace).onConflictDoUpdate({
         target: [traces.projectId, traces.traceId],
@@ -19,7 +20,8 @@ export async function persist(batch: ReturnType<typeof normalize>) {
       });
     }
     for (let i = 0; i < batch.spans.length; i += 100) {
-      await tx.insert(spans).values(batch.spans.slice(i, i + 100)).onConflictDoNothing();
+      inserted += (await tx.insert(spans).values(batch.spans.slice(i, i + 100)).onConflictDoNothing().returning({ spanId: spans.spanId })).length;
     }
+    return inserted;
   });
 }

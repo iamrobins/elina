@@ -29,6 +29,7 @@ services:
     environment:
       DATABASE_URL: postgres://elina:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/elina
       ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+      ATTRIBUTE_DENYLIST: ${ATTRIBUTE_DENYLIST:-}
       PORT: 3000
     ports:
       - "127.0.0.1:3000:3000"

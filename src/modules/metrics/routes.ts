@@ -1,0 +1,37 @@
+import { Hono } from "hono";
+import { z } from "zod";
+import { sql } from "../../db/client";
+
+const query = z.object({
+  projectId: z.uuid(),
+  from: z.iso.datetime({ offset: true }).optional(),
+  to: z.iso.datetime({ offset: true }).optional(),
+});
+
+export const metricsRoutes = new Hono();
+
+metricsRoutes.get("/metrics/summary", async (c) => {
+  const parsed = query.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: "invalid metrics filters" }, 400);
+  const { projectId, from, to } = parsed.data;
+  if (from && to && new Date(from) > new Date(to)) return c.json({ error: "invalid time range" }, 400);
+  const start = from ? new Date(from) : new Date(0);
+  const end = to ? new Date(to) : new Date(8_640_000_000_000_000);
+  const [trace, usage] = await Promise.all([
+    sql`SELECT count(*)::integer AS "traceCount",
+      count(*) FILTER (WHERE status = 'error')::integer AS "errorCount",
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (ended_at - started_at)) * 1000)::double precision AS "p50LatencyMs",
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (ended_at - started_at)) * 1000)::double precision AS "p95LatencyMs"
+      FROM traces WHERE project_id = ${projectId} AND started_at >= ${start} AND started_at <= ${end}`,
+    sql`SELECT COALESCE(sum(input_tokens), 0)::text AS "inputTokens",
+      COALESCE(sum(output_tokens), 0)::text AS "outputTokens",
+      COALESCE(sum(cost_usd), 0)::text AS "knownCostUsd",
+      count(*) FILTER (WHERE cost_usd IS NULL AND (input_tokens IS NOT NULL OR output_tokens IS NOT NULL))::integer AS "missingCostSpans"
+      FROM spans WHERE project_id = ${projectId} AND started_at >= ${start} AND started_at <= ${end}`,
+  ]);
+  return c.json({
+    ...trace[0],
+    errorRate: trace[0].traceCount ? trace[0].errorCount / trace[0].traceCount : 0,
+    ...usage[0],
+  });
+});

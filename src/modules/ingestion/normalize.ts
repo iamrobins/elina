@@ -22,11 +22,12 @@ function date(nanos: bigint) {
 function attributes(items: KeyValue[]) {
   if (items.length > 128) invalid("too many attributes");
   const output: Record<string, unknown> = {};
+  const denied = new Set((process.env.ATTRIBUTE_DENYLIST ?? "").split(",").map((key) => key.trim()).filter(Boolean));
   for (const item of items) {
     if (!item.key || item.key.length > 256 || item.value === undefined) invalid("invalid attribute");
     const value = toJson(AnyValueSchema, item.value);
     if (JSON.stringify(value).length > 16_384) invalid("attribute too large");
-    output[item.key] = value;
+    if (!denied.has(item.key)) output[item.key] = value;
   }
   return output;
 }
@@ -43,6 +44,18 @@ function token(attrs: Record<string, unknown>, keys: string[]) {
     const parsed = BigInt(String(value));
     if (parsed < 0n || parsed > 9_223_372_036_854_775_807n) invalid("invalid token count");
     return parsed;
+  }
+  return null;
+}
+
+function reportedCost(attrs: Record<string, unknown>) {
+  // shortcut: unknown models keep null cost until a versioned price table is approved.
+  for (const key of ["gen_ai.usage.cost_usd", "elinaobs.cost.usd", "tinyobs.cost.usd"]) {
+    const value = scalar(attrs, key);
+    if (value === undefined) continue;
+    const cost = typeof value === "number" && Number.isFinite(value) ? value.toFixed(10).replace(/\.?0+$/, "") : String(value);
+    if (!/^(?:0|[1-9]\d{0,7})(?:\.\d{1,10})?$/.test(cost)) invalid("invalid reported cost");
+    return cost;
   }
   return null;
 }
@@ -76,6 +89,7 @@ export function normalize(request: ExportTraceServiceRequest, projectId: string)
         const type = scalar(attrs, "elinaobs.observation.type") ?? scalar(attrs, "tinyobs.observation.type") ?? "span";
         const model = scalar(attrs, "gen_ai.request.model") ?? scalar(attrs, "gen_ai.response.model");
         const provider = scalar(attrs, "gen_ai.provider.name") ?? scalar(attrs, "gen_ai.system");
+        const costUsd = reportedCost(attrs);
         spans.push({
           projectId, traceId, spanId, parentSpanId, name: span.name, asType: String(type), kind: span.kind,
           startedAt, endedAt, durationMs: Number(span.endTimeUnixNano - span.startTimeUnixNano) / 1_000_000,
@@ -83,6 +97,7 @@ export function normalize(request: ExportTraceServiceRequest, projectId: string)
           provider: provider == null ? null : String(provider),
           inputTokens: token(attrs, ["gen_ai.usage.input_tokens", "gen_ai.usage.prompt_tokens"]),
           outputTokens: token(attrs, ["gen_ai.usage.output_tokens", "gen_ai.usage.completion_tokens"]),
+          costUsd, costSource: costUsd === null ? null : "reported",
           attributes: attrs, resourceAttributes, scope: scopeJson, events, links,
         });
         const trace = traces.get(traceId);

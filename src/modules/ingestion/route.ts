@@ -16,12 +16,21 @@ async function bounded(stream: ReadableStream<Uint8Array> | null) {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_BYTES) { await reader.cancel(); throw new Error("request too large"); }
-    chunks.push(value);
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("request timeout")), 15_000); });
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BYTES) { void reader.cancel(); throw new Error("request too large"); }
+      chunks.push(value);
+    }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    clearTimeout(timer!);
   }
   const result = new Uint8Array(size);
   let offset = 0;
@@ -43,6 +52,8 @@ function replyStatus(code: number, message: string, http: number, json: boolean,
 export const ingestionRoutes = new Hono();
 
 ingestionRoutes.post("/v1/traces", async (c) => {
+  const started = performance.now();
+  const requestId = crypto.randomUUID();
   const json = c.req.header("content-type")?.split(";", 1)[0].trim().toLowerCase() === "application/json";
   const protobuf = c.req.header("content-type")?.split(";", 1)[0].trim().toLowerCase() === "application/x-protobuf";
   if (!json && !protobuf) return replyStatus(3, "unsupported content type", 415, false);
@@ -68,14 +79,18 @@ ingestionRoutes.post("/v1/traces", async (c) => {
     const body = encoding === "gzip" ? await bounded(new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"))) : compressed;
     const request = json ? fromJsonString(ExportTraceServiceRequestSchema, new TextDecoder("utf-8", { fatal: true }).decode(body)) : fromBinary(ExportTraceServiceRequestSchema, body);
     batch = normalize(request, projectId);
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "request timeout") return replyStatus(4, "request timeout", 408, json, true);
+    console.warn(JSON.stringify({ event: "ingest_rejected", requestId, projectId, status: 400 }));
     return replyStatus(3, "invalid trace payload", 400, json);
   }
 
   try {
-    await persist(batch);
+    const dbStarted = performance.now();
+    const inserted = await persist(batch);
+    console.log(JSON.stringify({ event: "ingest_complete", requestId, projectId, spanCount: inserted, duplicateCount: batch.spans.length - inserted, dbMs: Math.round(performance.now() - dbStarted), durationMs: Math.round(performance.now() - started), status: 200 }));
   } catch {
-    console.error(JSON.stringify({ event: "ingest_failed", projectId, spanCount: batch.spans.length }));
+    console.error(JSON.stringify({ event: "ingest_failed", requestId, projectId, spanCount: batch.spans.length, durationMs: Math.round(performance.now() - started), status: 503 }));
     return replyStatus(14, "storage unavailable", 503, json, true);
   }
   const response = create(ExportTraceServiceResponseSchema);
