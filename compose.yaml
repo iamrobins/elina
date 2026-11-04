@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: elina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: elina
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elina -d elina"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://elina:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/elina
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
