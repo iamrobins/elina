@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { sql } from "./db/client";
+import { adminAuth } from "./middleware/admin-auth";
+import { projectRoutes } from "./modules/projects/routes";
 
 export const app = new Hono();
 
@@ -12,3 +14,6 @@ app.get("/health/ready", async (c) => {
     return c.json({ status: "unavailable" }, 503);
   }
 });
+
+app.use("/api/*", adminAuth);
+app.route("/api", projectRoutes);

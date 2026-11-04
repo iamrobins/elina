@@ -1,4 +1,5 @@
 import { SQL } from "bun";
+import { drizzle } from "drizzle-orm/bun-sql";
 import { parseEnv } from "../config/env";
 
 const env = parseEnv(process.env);
@@ -9,3 +10,5 @@ export const sql = new SQL({
   idleTimeout: 30,
   connectionTimeout: 5,
 });
+
+export const db = drizzle({ client: sql });
