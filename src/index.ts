@@ -22,7 +22,7 @@ const retentionTimer = setInterval(() => void runRetention(), 24 * 60 * 60 * 100
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
     clearInterval(retentionTimer);
-    await sql.close();
+    await sql.end();
     process.exit(0);
   });
 }

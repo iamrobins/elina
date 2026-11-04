@@ -89,8 +89,8 @@ ingestionRoutes.post("/v1/traces", async (c) => {
     const dbStarted = performance.now();
     const inserted = await persist(batch);
     console.log(JSON.stringify({ event: "ingest_complete", requestId, projectId, spanCount: inserted, duplicateCount: batch.spans.length - inserted, dbMs: Math.round(performance.now() - dbStarted), durationMs: Math.round(performance.now() - started), status: 200 }));
-  } catch {
-    console.error(JSON.stringify({ event: "ingest_failed", requestId, projectId, spanCount: batch.spans.length, durationMs: Math.round(performance.now() - started), status: 503 }));
+  } catch (error) {
+    console.error(JSON.stringify({ event: "ingest_failed", requestId, projectId, spanCount: batch.spans.length, durationMs: Math.round(performance.now() - started), errorName: error instanceof Error ? error.name : "unknown", errorCode: typeof error === "object" && error !== null && "code" in error ? error.code : undefined, status: 503 }));
     return replyStatus(14, "storage unavailable", 503, json, true);
   }
   const response = create(ExportTraceServiceResponseSchema);

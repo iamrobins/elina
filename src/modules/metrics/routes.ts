@@ -18,20 +18,20 @@ metricsRoutes.get("/metrics/summary", async (c) => {
   const start = from ? new Date(from) : new Date(0);
   const end = to ? new Date(to) : new Date(8_640_000_000_000_000);
   const [trace, usage] = await Promise.all([
-    sql`SELECT count(*)::integer AS "traceCount",
+    sql.query(`SELECT count(*)::integer AS "traceCount",
       count(*) FILTER (WHERE status = 'error')::integer AS "errorCount",
       percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (ended_at - started_at)) * 1000)::double precision AS "p50LatencyMs",
       percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (ended_at - started_at)) * 1000)::double precision AS "p95LatencyMs"
-      FROM traces WHERE project_id = ${projectId} AND started_at >= ${start} AND started_at <= ${end}`,
-    sql`SELECT COALESCE(sum(input_tokens), 0)::text AS "inputTokens",
+      FROM traces WHERE project_id = $1 AND started_at >= $2 AND started_at <= $3`, [projectId, start, end]),
+    sql.query(`SELECT COALESCE(sum(input_tokens), 0)::text AS "inputTokens",
       COALESCE(sum(output_tokens), 0)::text AS "outputTokens",
       COALESCE(sum(cost_usd), 0)::text AS "knownCostUsd",
       count(*) FILTER (WHERE cost_usd IS NULL AND (input_tokens IS NOT NULL OR output_tokens IS NOT NULL))::integer AS "missingCostSpans"
-      FROM spans WHERE project_id = ${projectId} AND started_at >= ${start} AND started_at <= ${end}`,
+      FROM spans WHERE project_id = $1 AND started_at >= $2 AND started_at <= $3`, [projectId, start, end]),
   ]);
   return c.json({
-    ...trace[0],
-    errorRate: trace[0].traceCount ? trace[0].errorCount / trace[0].traceCount : 0,
-    ...usage[0],
+    ...trace.rows[0],
+    errorRate: trace.rows[0].traceCount ? trace.rows[0].errorCount / trace.rows[0].traceCount : 0,
+    ...usage.rows[0],
   });
 });

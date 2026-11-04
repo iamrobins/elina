@@ -1,10 +1,10 @@
-import { sql as fragment } from "drizzle-orm";
+import { and, eq, inArray, sql as fragment } from "drizzle-orm";
 import { db } from "../../db/client";
 import { spans, traces } from "../../db/schema";
 import { normalize } from "./normalize";
 
 export async function persist(batch: ReturnType<typeof normalize>) {
-  return db.transaction(async (tx) => {
+  const inserted = await db.transaction(async (tx) => {
     let inserted = 0;
     for (const trace of batch.traces) {
       await tx.insert(traces).values(trace).onConflictDoUpdate({
@@ -24,4 +24,13 @@ export async function persist(batch: ReturnType<typeof normalize>) {
     }
     return inserted;
   });
+  if (batch.spans.length) {
+    const rows = await db.select({ traceId: spans.traceId, spanId: spans.spanId }).from(spans).where(and(
+      eq(spans.projectId, batch.spans[0].projectId),
+      inArray(fragment`(${spans.traceId}, ${spans.spanId})`, batch.spans.map((span) => fragment`(${span.traceId}, ${span.spanId})`)),
+    ));
+    const stored = new Set(rows.map((row) => `${row.traceId}:${row.spanId}`));
+    if (batch.spans.some((span) => !stored.has(`${span.traceId}:${span.spanId}`))) throw new Error("commit not visible");
+  }
+  return inserted;
 }
