@@ -1,6 +1,6 @@
 # Elina server
 
-Bun/Hono trace receiver backed by PostgreSQL. This is an in-progress v0.1 backend; query and metrics endpoints are not implemented yet.
+Bun/Hono trace receiver backed by PostgreSQL. This is an in-progress v0.1 backend; metrics and retention are not implemented yet.
 
 ## Local run
 
@@ -14,6 +14,11 @@ Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSW
 - `DELETE /api/keys/:id` revokes a write key.
 
 Send OTLP/HTTP traces to `POST /v1/traces` with `Authorization: Bearer <writeKey>`. Protobuf and OTLP JSON, including gzip, are accepted. A 200 response follows a committed PostgreSQL transaction.
+
+Admin trace reads require `projectId` even with the admin token:
+
+- `GET /api/traces?projectId=<uuid>&from=<ISO>&to=<ISO>&status=error&limit=50&cursor=<opaque>` lists summaries newest first. `nextCursor` continues the same ordering.
+- `GET /api/traces/:traceId?projectId=<uuid>` returns a trace and its flat span list.
 
 ## Protocol generation
 
