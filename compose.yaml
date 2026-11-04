@@ -38,5 +38,18 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  web:
+    build: ../elina-web
+    environment:
+      ELINA_API_INTERNAL_URL: http://api:3000
+      ELINA_BACKEND_ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH:?Set DASHBOARD_PASSWORD_HASH}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   postgres_data:

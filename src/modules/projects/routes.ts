@@ -13,6 +13,16 @@ const uuid = z.uuid();
 
 export const projectRoutes = new Hono();
 
+projectRoutes.get("/projects/:id/keys", async (c) => {
+  const projectId = c.req.param("id");
+  if (!uuid.safeParse(projectId).success) return c.json({ error: "invalid project ID" }, 400);
+  const [project] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "project not found" }, 404);
+  const items = await db.select({ id: apiKeys.id, keyPrefix: apiKeys.keyPrefix, createdAt: apiKeys.createdAt })
+    .from(apiKeys).where(and(eq(apiKeys.projectId, projectId), isNull(apiKeys.revokedAt))).orderBy(apiKeys.createdAt);
+  return c.json({ items });
+});
+
 projectRoutes.post("/projects", async (c) => {
   let body: unknown;
   try { body = await c.req.json(); } catch { return c.json({ error: "invalid JSON" }, 400); }

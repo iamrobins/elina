@@ -4,7 +4,7 @@ Bun/Hono trace receiver backed by PostgreSQL. This is an in-progress v0.1 backen
 
 ## Local run
 
-Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSWORD` and `ADMIN_TOKEN` (at least 32 characters), then run `docker compose up -d --build` from WSL. Compose runs migrations before starting the API. PostgreSQL stays on the private Compose network; the API binds to `127.0.0.1:3000`.
+Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSWORD` and `ADMIN_TOKEN` (at least 32 characters), and set `SESSION_SECRET` to 64 random hex characters. Generate `DASHBOARD_PASSWORD_HASH` with `bun -e "const c=require('node:crypto'); const s=c.randomBytes(16); console.log('scrypt:'+s.toString('hex')+':'+c.scryptSync('your-dashboard-password',s,64).toString('hex'))"`, replacing the sample password first. Then run `docker compose up -d --build` from WSL. Compose runs migrations before starting the API and frontend. PostgreSQL stays on the private Compose network; the API binds to `127.0.0.1:3000` and the dashboard to `127.0.0.1:3001`.
 
 `GET /health/live` checks the process and `GET /health/ready` checks PostgreSQL. Admin routes use `Authorization: Bearer <ADMIN_TOKEN>`:
 

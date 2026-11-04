@@ -50,6 +50,11 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect((await fetch(`${base}/v1/traces`, { method: "POST", headers: { Authorization: "Bearer wrong", "Content-Type": "application/x-protobuf" }, body: new Uint8Array() })).status).toBe(401);
   const keyResponse = await fetch(`${base}/api/projects/${first.project.id}/keys`, { method: "POST", headers: adminHeaders });
   const key = await keyResponse.json();
+  const activeKeys = await (await fetch(`${base}/api/projects/${first.project.id}/keys`, { headers: adminHeaders })).json();
+  expect(activeKeys.items.some((item: { id: string }) => item.id === key.id)).toBe(true);
+  expect(JSON.stringify(activeKeys)).not.toContain(key.writeKey);
   expect((await fetch(`${base}/api/keys/${key.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
+  const remainingKeys = await (await fetch(`${base}/api/projects/${first.project.id}/keys`, { headers: adminHeaders })).json();
+  expect(remainingKeys.items.some((item: { id: string }) => item.id === key.id)).toBe(false);
   expect((await send(key.writeKey, 4, 10)).status).toBe(401);
 });
