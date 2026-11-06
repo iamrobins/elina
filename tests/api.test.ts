@@ -60,6 +60,10 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).review).toMatchObject({ verdict: "bad", note: "Needs work" });
   expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&review=bad`, { headers: adminHeaders })).json()).items.map((item: { traceId: string }) => item.traceId)).toEqual([reviewedId]);
   expect((await (await fetch(`${base}/api/traces?projectId=${second.project.id}&review=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
+  const unreviewed = async (projectId: string, filters = "") => (await (await fetch(`${base}/api/traces?projectId=${projectId}&review=unreviewed${filters}`, { headers: adminHeaders })).json()).items;
+  expect((await unreviewed(first.project.id)).map((item: { traceId: string }) => item.traceId)).not.toContain(reviewedId);
+  expect(await unreviewed(first.project.id, "&status=error")).toHaveLength(0);
+  expect(await unreviewed(second.project.id)).toHaveLength(1);
   expect((await putReview(reviewUrl, { verdict: "good", note: null })).status).toBe(200);
   expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&review=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
   expect((await send(first.writeKey, 4, 10, false, -7000)).status).toBe(200);
@@ -69,6 +73,7 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect(period).toMatchObject({ reviewedCount: 1, goodCount: 1, previousReviewedCount: 1, previousGoodCount: 0 });
   expect((await fetch(reviewUrl, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
   expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).review).toBeNull();
+  expect((await unreviewed(first.project.id, "&status=error")).map((item: { traceId: string }) => item.traceId)).toEqual([reviewedId]);
   const malformed = await fetch(`${base}/v1/traces`, { method: "POST", headers: { Authorization: `Bearer ${first.writeKey}`, "Content-Type": "application/x-protobuf", "Content-Encoding": "gzip" }, body: gzipSync(Buffer.alloc(5 * 1024 * 1024)) });
   expect(malformed.status).toBe(400);
   expect((await fetch(`${base}/v1/traces`, { method: "POST", headers: { Authorization: `Bearer ${first.writeKey}`, "Content-Type": "application/x-protobuf" }, body: Uint8Array.from([255]) })).status).toBe(400);
