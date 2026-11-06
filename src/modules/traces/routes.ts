@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte, or, sql as fragment } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, lte, or, sql as fragment } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../../db/client";
@@ -9,6 +9,7 @@ const listQuery = z.object({
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
   status: z.enum(["ok", "error", "unset"]).optional(),
+  q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().max(512).optional(),
 });
@@ -24,16 +25,18 @@ export const traceRoutes = new Hono();
 traceRoutes.get("/traces", async (c) => {
   const parsed = listQuery.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "invalid trace filters" }, 400);
-  const { projectId, from, to, status, limit, cursor } = parsed.data;
+  const { projectId, from, to, status, q, limit, cursor } = parsed.data;
   let after: z.infer<typeof cursorShape> | undefined;
   try { if (cursor) after = decodeCursor(cursor); } catch { return c.json({ error: "invalid cursor" }, 400); }
   if (from && to && new Date(from) > new Date(to)) return c.json({ error: "invalid time range" }, 400);
+  const pattern = q ? `%${q.replace(/[\\%_]/g, "\\$&")}%` : undefined;
 
   const where = and(
     eq(traces.projectId, projectId),
     from ? gte(traces.startedAt, new Date(from)) : undefined,
     to ? lte(traces.startedAt, new Date(to)) : undefined,
     status ? eq(traces.status, status) : undefined,
+    pattern ? or(ilike(traces.name, pattern), ilike(traces.traceId, pattern)) : undefined,
     after ? or(lt(traces.startedAt, new Date(after.startedAt)), and(eq(traces.startedAt, new Date(after.startedAt)), lt(traces.traceId, after.traceId))) : undefined,
   );
   const rows = await db.select({

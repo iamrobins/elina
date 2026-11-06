@@ -40,6 +40,12 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect(list.nextCursor).toBeTruthy();
   const next = await (await fetch(`${base}/api/traces?projectId=${first.project.id}&limit=1&cursor=${encodeURIComponent(list.nextCursor)}`, { headers: adminHeaders })).json();
   expect(next.items[0].traceId).not.toBe(list.items[0].traceId);
+  const searched = await (await fetch(`${base}/api/traces?projectId=${first.project.id}&q=trace-2`, { headers: adminHeaders })).json();
+  expect(searched.items.map((item: { name: string }) => item.name)).toEqual(["trace-2"]);
+  const searchedId = await (await fetch(`${base}/api/traces?projectId=${first.project.id}&q=${searched.items[0].traceId.slice(-4)}`, { headers: adminHeaders })).json();
+  expect(searchedId.items.map((item: { traceId: string }) => item.traceId)).toEqual([searched.items[0].traceId]);
+  const otherSearch = await (await fetch(`${base}/api/traces?projectId=${second.project.id}&q=TRACE-2`, { headers: adminHeaders })).json();
+  expect(otherSearch.items).toHaveLength(0);
   const otherTrace = await (await fetch(`${base}/api/traces?projectId=${second.project.id}`, { headers: adminHeaders })).json();
   expect(otherTrace.items).toHaveLength(1);
   expect(otherTrace.items[0].traceId).toBe(Buffer.from([...traceId.slice(0, 15), 1]).toString("hex"));
