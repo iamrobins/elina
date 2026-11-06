@@ -57,4 +57,16 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   const remainingKeys = await (await fetch(`${base}/api/projects/${first.project.id}/keys`, { headers: adminHeaders })).json();
   expect(remainingKeys.items.some((item: { id: string }) => item.id === key.id)).toBe(false);
   expect((await send(key.writeKey, 4, 10)).status).toBe(401);
+  const price = { provider: "openai", model: "test-model", inputPerMillion: "1", outputPerMillion: "2", cachedInputPerMillion: null };
+  expect((await fetch(`${base}/api/projects/${first.project.id}/prices`, { method: "PUT", headers: { ...adminHeaders, "Content-Type": "application/json" }, body: JSON.stringify(price) })).status).toBe(200);
+  expect((await fetch(`${base}/api/projects/${first.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
+  expect((await fetch(`${base}/api/projects/${first.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
+  expect((await fetch(`${base}/api/projects/not-a-uuid`, { method: "DELETE", headers: adminHeaders })).status).toBe(400);
+  const projects = await (await fetch(`${base}/api/projects`, { headers: adminHeaders })).json();
+  expect(projects.items.some((item: { id: string }) => item.id === first.project.id)).toBe(false);
+  expect((await send(first.writeKey, 5, 10)).status).toBe(401);
+  expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}`, { headers: adminHeaders })).json()).items).toHaveLength(0);
+  expect((await (await fetch(`${base}/api/projects/${first.project.id}/prices`, { headers: adminHeaders })).json()).items).toHaveLength(0);
+  expect((await (await fetch(`${base}/api/traces?projectId=${second.project.id}`, { headers: adminHeaders })).json()).items).toHaveLength(1);
+  expect((await fetch(`${base}/api/projects/${second.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
 });

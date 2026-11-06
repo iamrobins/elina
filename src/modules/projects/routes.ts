@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../../db/client";
-import { apiKeys, modelPrices, projects } from "../../db/schema";
+import { apiKeys, modelPrices, projects, traces } from "../../db/schema";
 import { issueKey } from "./keys";
 import { catalog, catalogVersion } from "../ingestion/pricing";
 
@@ -81,6 +81,21 @@ projectRoutes.post("/projects", async (c) => {
 projectRoutes.get("/projects", async (c) => {
   const items = await db.select().from(projects).orderBy(projects.createdAt);
   return c.json({ items });
+});
+
+projectRoutes.delete("/projects/:id", async (c) => {
+  const projectId = c.req.param("id");
+  if (!uuid.safeParse(projectId).success) return c.json({ error: "invalid project ID" }, 400);
+  const deleted = await db.transaction(async (tx) => {
+    const [project] = await tx.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId)).for("update");
+    if (!project) return false;
+    await tx.delete(traces).where(eq(traces.projectId, projectId));
+    await tx.delete(modelPrices).where(eq(modelPrices.projectId, projectId));
+    await tx.delete(apiKeys).where(eq(apiKeys.projectId, projectId));
+    await tx.delete(projects).where(eq(projects.id, projectId));
+    return true;
+  });
+  return deleted ? c.body(null, 204) : c.json({ error: "project not found" }, 404);
 });
 
 projectRoutes.post("/projects/:id/keys", async (c) => {
