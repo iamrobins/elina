@@ -1,0 +1,182 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "44e0d76d-ef8d-452d-89d4-c70c942e9d88",
+  "prevIds": [
+    "bc1d7c11-b3f0-45e1-9b92-cdd7dadf3ad0"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "trace_reviews"
+      ],
+      "writes": [
+        "s|tbl|public.trace_reviews",
+        "n|tbl|public.trace_reviews",
+        "e|tbl|public.trace_reviews",
+        "n|rel|public.trace_reviews",
+        "n|type|public.trace_reviews",
+        "n|rel|public.trace_reviews_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "trace_reviews"
+      ],
+      "writes": [
+        "s|fk|public.trace_reviews.trace_reviews_m48ENtDz8y2q_fkey",
+        "n|fk|public.trace_reviews.trace_reviews_m48ENtDz8y2q_fkey",
+        "e|fk|public.trace_reviews.trace_reviews_m48ENtDz8y2q_fkey",
+        "n|con|public.trace_reviews.trace_reviews_m48ENtDz8y2q_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.trace_reviews",
+        "n|sch|public",
+        "n|tbl|public.traces",
+        "n|sch|public",
+        "n|col|public.trace_reviews.project_id",
+        "n|col|public.trace_reviews.trace_id",
+        "n|col|public.traces.project_id",
+        "n|col|public.traces.trace_id",
+        "e|uniqueness|public.traces.project_id.trace_id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "trace_reviews",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "project_id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "trace_id",
+        "type": "char(32)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "verdict",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "note",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "reviewed_at",
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "trace_reviews_m48ENtDz8y2q_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "project_id",
+          "trace_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "traces",
+        "columnsTo": [
+          "project_id",
+          "trace_id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "trace_reviews",
+        "name": "trace_reviews_pkey",
+        "columns": [
+          "project_id",
+          "trace_id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

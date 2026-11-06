@@ -2,18 +2,20 @@ import { and, desc, eq, gte, ilike, lt, lte, or, sql as fragment } from "drizzle
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../../db/client";
-import { spans, traces } from "../../db/schema";
+import { spans, traceReviews, traces } from "../../db/schema";
 
 const listQuery = z.object({
   projectId: z.uuid(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
   status: z.enum(["ok", "error", "unset"]).optional(),
+  review: z.enum(["bad"]).optional(),
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().max(512).optional(),
 });
 const detailQuery = z.object({ projectId: z.uuid() });
+const reviewInput = z.object({ verdict: z.enum(["good", "bad"]), note: z.string().trim().max(2000).nullable().default(null) });
 const cursorShape = z.object({ startedAt: z.iso.datetime(), traceId: z.string().regex(/^[a-f0-9]{32}$/) });
 
 function decodeCursor(value: string) {
@@ -25,7 +27,7 @@ export const traceRoutes = new Hono();
 traceRoutes.get("/traces", async (c) => {
   const parsed = listQuery.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "invalid trace filters" }, 400);
-  const { projectId, from, to, status, q, limit, cursor } = parsed.data;
+  const { projectId, from, to, status, review, q, limit, cursor } = parsed.data;
   let after: z.infer<typeof cursorShape> | undefined;
   try { if (cursor) after = decodeCursor(cursor); } catch { return c.json({ error: "invalid cursor" }, 400); }
   if (from && to && new Date(from) > new Date(to)) return c.json({ error: "invalid time range" }, 400);
@@ -36,6 +38,7 @@ traceRoutes.get("/traces", async (c) => {
     from ? gte(traces.startedAt, new Date(from)) : undefined,
     to ? lte(traces.startedAt, new Date(to)) : undefined,
     status ? eq(traces.status, status) : undefined,
+    review ? eq(traceReviews.verdict, review) : undefined,
     pattern ? or(ilike(traces.name, pattern), ilike(traces.traceId, pattern)) : undefined,
     after ? or(lt(traces.startedAt, new Date(after.startedAt)), and(eq(traces.startedAt, new Date(after.startedAt)), lt(traces.traceId, after.traceId))) : undefined,
   );
@@ -50,8 +53,10 @@ traceRoutes.get("/traces", async (c) => {
     inputTokens: fragment<string>`COALESCE(SUM(${spans.inputTokens}), 0)::text`,
     outputTokens: fragment<string>`COALESCE(SUM(${spans.outputTokens}), 0)::text`,
     costUsd: fragment<string | null>`SUM(${spans.costUsd})::text`,
-  }).from(traces).leftJoin(spans, and(eq(spans.projectId, traces.projectId), eq(spans.traceId, traces.traceId)))
-    .where(where).groupBy(traces.projectId, traces.traceId)
+    review: traceReviews.verdict,
+  }).from(traces).leftJoin(traceReviews, and(eq(traceReviews.projectId, traces.projectId), eq(traceReviews.traceId, traces.traceId)))
+    .leftJoin(spans, and(eq(spans.projectId, traces.projectId), eq(spans.traceId, traces.traceId)))
+    .where(where).groupBy(traces.projectId, traces.traceId, traceReviews.verdict)
     .orderBy(desc(traces.startedAt), desc(traces.traceId)).limit(limit + 1);
   const items = rows.slice(0, limit);
   const last = items.at(-1);
@@ -67,5 +72,32 @@ traceRoutes.get("/traces/:traceId", async (c) => {
   const [trace] = await db.select().from(traces).where(and(eq(traces.projectId, projectId), eq(traces.traceId, traceId)));
   if (!trace) return c.json({ error: "trace not found" }, 404);
   const rows = await db.select().from(spans).where(and(eq(spans.projectId, projectId), eq(spans.traceId, traceId))).orderBy(spans.startedAt, spans.spanId);
-  return c.json({ trace, spans: rows.map((row) => ({ ...row, inputTokens: row.inputTokens?.toString() ?? null, outputTokens: row.outputTokens?.toString() ?? null })) });
+  const [review] = await db.select().from(traceReviews).where(and(eq(traceReviews.projectId, projectId), eq(traceReviews.traceId, traceId)));
+  return c.json({ trace, review: review ?? null, spans: rows.map((row) => ({ ...row, inputTokens: row.inputTokens?.toString() ?? null, outputTokens: row.outputTokens?.toString() ?? null })) });
+});
+
+traceRoutes.put("/traces/:traceId/review", async (c) => {
+  const parsed = detailQuery.safeParse(c.req.query());
+  const traceId = c.req.param("traceId");
+  if (!parsed.success || !/^[a-f0-9]{32}$/.test(traceId)) return c.json({ error: "invalid trace request" }, 400);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ error: "invalid JSON" }, 400); }
+  const input = reviewInput.safeParse(body);
+  if (!input.success) return c.json({ error: "invalid review" }, 400);
+  const projectId = parsed.data.projectId;
+  const [trace] = await db.select({ traceId: traces.traceId }).from(traces).where(and(eq(traces.projectId, projectId), eq(traces.traceId, traceId)));
+  if (!trace) return c.json({ error: "trace not found" }, 404);
+  const [review] = await db.insert(traceReviews).values({ projectId, traceId, ...input.data }).onConflictDoUpdate({
+    target: [traceReviews.projectId, traceReviews.traceId],
+    set: { ...input.data, reviewedAt: new Date() },
+  }).returning();
+  return c.json({ review });
+});
+
+traceRoutes.delete("/traces/:traceId/review", async (c) => {
+  const parsed = detailQuery.safeParse(c.req.query());
+  const traceId = c.req.param("traceId");
+  if (!parsed.success || !/^[a-f0-9]{32}$/.test(traceId)) return c.json({ error: "invalid trace request" }, 400);
+  const [review] = await db.delete(traceReviews).where(and(eq(traceReviews.projectId, parsed.data.projectId), eq(traceReviews.traceId, traceId))).returning({ traceId: traceReviews.traceId });
+  return review ? c.body(null, 204) : c.json({ error: "review not found" }, 404);
 });

@@ -17,10 +17,10 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   const [first, second] = await Promise.all([createProject(), createProject()]);
   const traceId = Uint8Array.from({ length: 16 }, (_, i) => i + 1);
   const attr = (key: string, value: string) => ({ key, value: { value: { case: "stringValue" as const, value } } });
-  const send = (key: string, n: number, durationMs: number, error = false) => {
+  const send = (key: string, n: number, durationMs: number, error = false, offsetMs = 0) => {
     const bytes = toBinary(ExportTraceServiceRequestSchema, create(ExportTraceServiceRequestSchema, { resourceSpans: [{ scopeSpans: [{ spans: [{
       traceId: Uint8Array.from([...traceId.slice(0, 15), n]), spanId: Uint8Array.from([n, 0, 0, 0, 0, 0, 0, 1]), name: `trace-${n}`,
-      startTimeUnixNano: 1_800_000_000_000_000_000n, endTimeUnixNano: 1_800_000_000_000_000_000n + BigInt(durationMs) * 1_000_000n,
+      startTimeUnixNano: 1_800_000_000_000_000_000n + BigInt(offsetMs) * 1_000_000n, endTimeUnixNano: 1_800_000_000_000_000_000n + BigInt(offsetMs + durationMs) * 1_000_000n,
       status: { code: error ? Status_StatusCode.ERROR : Status_StatusCode.OK },
       attributes: [attr("gen_ai.usage.input_tokens", "10"), ...(n === 1 ? [attr("gen_ai.usage.cost_usd", "0.0025")] : [])],
     }] }] }] }));
@@ -50,6 +50,25 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect(otherTrace.items).toHaveLength(1);
   expect(otherTrace.items[0].traceId).toBe(Buffer.from([...traceId.slice(0, 15), 1]).toString("hex"));
   expect((await fetch(`${base}/api/traces/${Buffer.from([...traceId.slice(0, 15), 2]).toString("hex")}?projectId=${second.project.id}`, { headers: adminHeaders })).status).toBe(404);
+  const reviewedId = searched.items[0].traceId;
+  const reviewUrl = `${base}/api/traces/${reviewedId}/review?projectId=${first.project.id}`;
+  const putReview = (url: string, body: unknown) => fetch(url, { method: "PUT", headers: { ...adminHeaders, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  expect((await putReview(reviewUrl, { verdict: "maybe", note: null })).status).toBe(400);
+  expect((await putReview(reviewUrl, { verdict: "bad", note: "x".repeat(2001) })).status).toBe(400);
+  expect((await putReview(`${base}/api/traces/${reviewedId}/review?projectId=${second.project.id}`, { verdict: "bad", note: null })).status).toBe(404);
+  expect((await putReview(reviewUrl, { verdict: "bad", note: "Needs work" })).status).toBe(200);
+  expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).review).toMatchObject({ verdict: "bad", note: "Needs work" });
+  expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&review=bad`, { headers: adminHeaders })).json()).items.map((item: { traceId: string }) => item.traceId)).toEqual([reviewedId]);
+  expect((await (await fetch(`${base}/api/traces?projectId=${second.project.id}&review=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
+  expect((await putReview(reviewUrl, { verdict: "good", note: null })).status).toBe(200);
+  expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&review=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
+  expect((await send(first.writeKey, 4, 10, false, -7000)).status).toBe(200);
+  const previousId = Buffer.from([...traceId.slice(0, 15), 4]).toString("hex");
+  expect((await putReview(`${base}/api/traces/${previousId}/review?projectId=${first.project.id}`, { verdict: "bad", note: null })).status).toBe(200);
+  const period = await (await fetch(`${base}/api/metrics/summary?projectId=${first.project.id}&from=${new Date(1_800_000_000_000 - 5000).toISOString()}&to=${new Date(1_800_000_000_000 + 5000).toISOString()}`, { headers: adminHeaders })).json();
+  expect(period).toMatchObject({ reviewedCount: 1, goodCount: 1, previousReviewedCount: 1, previousGoodCount: 0 });
+  expect((await fetch(reviewUrl, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
+  expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).review).toBeNull();
   const malformed = await fetch(`${base}/v1/traces`, { method: "POST", headers: { Authorization: `Bearer ${first.writeKey}`, "Content-Type": "application/x-protobuf", "Content-Encoding": "gzip" }, body: gzipSync(Buffer.alloc(5 * 1024 * 1024)) });
   expect(malformed.status).toBe(400);
   expect((await fetch(`${base}/v1/traces`, { method: "POST", headers: { Authorization: `Bearer ${first.writeKey}`, "Content-Type": "application/x-protobuf" }, body: Uint8Array.from([255]) })).status).toBe(400);
@@ -66,6 +85,7 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   const price = { provider: "openai", model: "test-model", inputPerMillion: "1", outputPerMillion: "2", cachedInputPerMillion: null };
   expect((await fetch(`${base}/api/projects/${first.project.id}/prices`, { method: "PUT", headers: { ...adminHeaders, "Content-Type": "application/json" }, body: JSON.stringify(price) })).status).toBe(200);
   expect((await fetch(`${base}/api/projects/${first.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
+  expect((await fetch(`${base}/api/traces/${previousId}/review?projectId=${first.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
   expect((await fetch(`${base}/api/projects/${first.project.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(404);
   expect((await fetch(`${base}/api/projects/not-a-uuid`, { method: "DELETE", headers: adminHeaders })).status).toBe(400);
   const projects = await (await fetch(`${base}/api/projects`, { headers: adminHeaders })).json();

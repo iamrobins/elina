@@ -46,6 +46,17 @@ export const traces = pgTable("traces", {
   index("traces_project_time_idx").on(table.projectId, table.startedAt.desc(), table.traceId.desc()),
 ]);
 
+export const traceReviews = pgTable("trace_reviews", {
+  projectId: uuid("project_id").notNull(),
+  traceId: char("trace_id", { length: 32 }).notNull(),
+  verdict: text("verdict").notNull(),
+  note: text("note"),
+  reviewedAt: time("reviewed_at").defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.projectId, table.traceId] }),
+  foreignKey({ columns: [table.projectId, table.traceId], foreignColumns: [traces.projectId, traces.traceId] }).onDelete("cascade"),
+]);
+
 export const spans = pgTable("spans", {
   projectId: uuid("project_id").notNull(),
   traceId: char("trace_id", { length: 32 }).notNull(),
