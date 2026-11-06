@@ -17,6 +17,8 @@ Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSW
 
 Send OTLP/HTTP traces to `POST /v1/traces` with `Authorization: Bearer <writeKey>`. Protobuf and OTLP JSON, including gzip, are accepted. A 200 response follows a committed PostgreSQL transaction.
 
+Application feedback is optional. Once a trace is stored, `PUT /v1/traces/:traceId/feedback` with the same project write key and JSON `{"verdict":"good"}` or `{"verdict":"bad","note":"..."}` sets or updates that trace's feedback. The note is optional (maximum 2000 characters). A missing trace returns 404. This signal stays separate from dashboard human reviews; keep the write key in server-side code.
+
 Set `ATTRIBUTE_DENYLIST` to comma-separated exact attribute names to remove those fields from resource, scope, span, event, and link attributes before storage. This also removes them from normalized token/cost projections. Request bodies and keys are not logged.
 
 Admin trace reads require `projectId` even with the admin token:

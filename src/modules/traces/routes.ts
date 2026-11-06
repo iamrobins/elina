@@ -54,6 +54,7 @@ traceRoutes.get("/traces", async (c) => {
     outputTokens: fragment<string>`COALESCE(SUM(${spans.outputTokens}), 0)::text`,
     costUsd: fragment<string | null>`SUM(${spans.costUsd})::text`,
     review: traceReviews.verdict,
+    feedbackVerdict: traces.feedbackVerdict,
   }).from(traces).leftJoin(traceReviews, and(eq(traceReviews.projectId, traces.projectId), eq(traceReviews.traceId, traces.traceId)))
     .leftJoin(spans, and(eq(spans.projectId, traces.projectId), eq(spans.traceId, traces.traceId)))
     .where(where).groupBy(traces.projectId, traces.traceId, traceReviews.verdict)

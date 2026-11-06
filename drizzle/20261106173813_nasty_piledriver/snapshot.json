@@ -1,0 +1,115 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "0df7b2d3-8c6d-45c6-8db7-6b0fd4877e2f",
+  "prevIds": [
+    "44e0d76d-ef8d-452d-89d4-c70c942e9d88"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "traces",
+        "feedback_verdict"
+      ],
+      "writes": [
+        "s|col|public.traces.feedback_verdict",
+        "n|col|public.traces.feedback_verdict",
+        "e|col|public.traces.feedback_verdict"
+      ],
+      "reads": [
+        "n|tbl|public.traces",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "traces",
+        "feedback_note"
+      ],
+      "writes": [
+        "s|col|public.traces.feedback_note",
+        "n|col|public.traces.feedback_note",
+        "e|col|public.traces.feedback_note"
+      ],
+      "reads": [
+        "n|tbl|public.traces",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "traces",
+        "feedback_at"
+      ],
+      "writes": [
+        "s|col|public.traces.feedback_at",
+        "n|col|public.traces.feedback_at",
+        "e|col|public.traces.feedback_at"
+      ],
+      "reads": [
+        "n|tbl|public.traces",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "traces",
+        "name": "feedback_verdict",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "traces",
+        "name": "feedback_note",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "traces",
+        "name": "feedback_at",
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

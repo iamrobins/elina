@@ -39,6 +39,9 @@ export const traces = pgTable("traces", {
   startedAt: time("started_at").notNull(),
   endedAt: time("ended_at").notNull(),
   status: text("status").notNull(),
+  feedbackVerdict: text("feedback_verdict"),
+  feedbackNote: text("feedback_note"),
+  feedbackAt: time("feedback_at"),
   createdAt: time("created_at").defaultNow().notNull(),
   updatedAt: time("updated_at").defaultNow().notNull(),
 }, (table) => [
