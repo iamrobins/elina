@@ -41,7 +41,7 @@ services:
 
   web:
     image: ghcr.io/iamrobins/elina:latest
-    command: ["node", "elina-web/node_modules/next/dist/bin/next", "start", "elina-web", "-p", "3001"]
+    command: ["node", "web/node_modules/next/dist/bin/next", "start", "web", "-p", "3001"]
     environment:
       ELINA_API_INTERNAL_URL: http://api:3000
       ELINA_BACKEND_ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
