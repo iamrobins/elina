@@ -10,6 +10,7 @@ const listQuery = z.object({
   to: z.iso.datetime({ offset: true }).optional(),
   status: z.enum(["ok", "error", "unset"]).optional(),
   review: z.enum(["bad", "unreviewed"]).optional(),
+  feedback: z.enum(["bad"]).optional(),
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().max(512).optional(),
@@ -27,7 +28,7 @@ export const traceRoutes = new Hono();
 traceRoutes.get("/traces", async (c) => {
   const parsed = listQuery.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "invalid trace filters" }, 400);
-  const { projectId, from, to, status, review, q, limit, cursor } = parsed.data;
+  const { projectId, from, to, status, review, feedback, q, limit, cursor } = parsed.data;
   let after: z.infer<typeof cursorShape> | undefined;
   try { if (cursor) after = decodeCursor(cursor); } catch { return c.json({ error: "invalid cursor" }, 400); }
   if (from && to && new Date(from) > new Date(to)) return c.json({ error: "invalid time range" }, 400);
@@ -39,6 +40,7 @@ traceRoutes.get("/traces", async (c) => {
     to ? lte(traces.startedAt, new Date(to)) : undefined,
     status ? eq(traces.status, status) : undefined,
     review === "unreviewed" ? isNull(traceReviews.traceId) : review ? eq(traceReviews.verdict, review) : undefined,
+    feedback ? eq(traces.feedbackVerdict, feedback) : undefined,
     pattern ? or(ilike(traces.name, pattern), ilike(traces.traceId, pattern)) : undefined,
     after ? or(lt(traces.startedAt, new Date(after.startedAt)), and(eq(traces.startedAt, new Date(after.startedAt)), lt(traces.traceId, after.traceId))) : undefined,
   );

@@ -10,6 +10,47 @@ const query = z.object({
 
 export const metricsRoutes = new Hono();
 
+metricsRoutes.get("/metrics/trends", async (c) => {
+  const parsed = query.extend({
+    from: z.iso.datetime({ offset: true }), to: z.iso.datetime({ offset: true }),
+    bucketMinutes: z.coerce.number().int().refine((value) => [5, 60, 360, 1440].includes(value)),
+  }).safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: "invalid trends filters" }, 400);
+  const { projectId, from, to, bucketMinutes } = parsed.data;
+  const start = new Date(from);
+  const end = new Date(to);
+  const bucketMs = bucketMinutes * 60_000;
+  const bucketCount = Math.ceil((end.getTime() - start.getTime()) / bucketMs);
+  if (bucketCount < 1 || bucketCount > 30) return c.json({ error: "invalid trends range" }, 400);
+  const result = await sql.query(`SELECT floor((extract(epoch FROM t.started_at) - extract(epoch FROM $2::timestamptz)) / ($4 * 60))::integer AS bucket,
+    count(*)::integer AS "traceCount",
+    count(*) FILTER (WHERE t.status = 'error')::integer AS "errorCount",
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (t.ended_at - t.started_at)) * 1000)::double precision AS "p95LatencyMs",
+    COALESCE(sum(u.cost), 0)::text AS "knownCostUsd",
+    COALESCE(sum(u.missing), 0)::integer AS "missingCostSpans"
+    FROM traces t
+    LEFT JOIN LATERAL (SELECT sum(s.cost_usd) AS cost,
+      count(*) FILTER (WHERE s.cost_usd IS NULL AND (s.input_tokens IS NOT NULL OR s.output_tokens IS NOT NULL)) AS missing
+      FROM spans s WHERE s.project_id = t.project_id AND s.trace_id = t.trace_id) u ON true
+    WHERE t.project_id = $1 AND t.started_at >= $2 AND t.started_at < $3
+    GROUP BY bucket ORDER BY bucket`, [projectId, start, end, bucketMinutes]);
+  const rows = new Map(result.rows.map((row) => [row.bucket, row]));
+  const items = Array.from({ length: bucketCount }, (_, bucket) => {
+    const row = rows.get(bucket);
+    return {
+      from: new Date(start.getTime() + bucket * bucketMs).toISOString(),
+      to: new Date(Math.min(start.getTime() + (bucket + 1) * bucketMs, end.getTime())).toISOString(),
+      traceCount: row?.traceCount ?? 0,
+      errorCount: row?.errorCount ?? 0,
+      errorRate: row?.traceCount ? row.errorCount / row.traceCount : 0,
+      p95LatencyMs: row?.p95LatencyMs ?? null,
+      knownCostUsd: row?.knownCostUsd ?? "0",
+      missingCostSpans: row?.missingCostSpans ?? 0,
+    };
+  });
+  return c.json({ items });
+});
+
 metricsRoutes.get("/metrics/summary", async (c) => {
   const parsed = query.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: "invalid metrics filters" }, 400);

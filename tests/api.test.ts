@@ -35,6 +35,14 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect(firstMetrics).toMatchObject({ traceCount: 3, errorCount: 1, p50LatencyMs: 100, inputTokens: "30", knownCostUsd: "0.0025000000", missingCostSpans: 2 });
   expect(firstMetrics.p95LatencyMs).toBeCloseTo(910);
   expect(await metrics(second.project.id)).toMatchObject({ traceCount: 1, inputTokens: "10", knownCostUsd: "0.0025000000" });
+  const trendRange = `from=${new Date(1_800_000_000_000 - 300_000).toISOString()}&to=${new Date(1_800_000_000_000 + 600_000).toISOString()}&bucketMinutes=5`;
+  const trends = await (await fetch(`${base}/api/metrics/trends?projectId=${first.project.id}&${trendRange}`, { headers: adminHeaders })).json();
+  expect(trends.items).toHaveLength(3);
+  expect(trends.items.map((item: { traceCount: number }) => item.traceCount)).toEqual([0, 3, 0]);
+  expect(trends.items[1]).toMatchObject({ errorCount: 1, errorRate: 1 / 3, knownCostUsd: "0.0025000000", missingCostSpans: 2 });
+  expect(trends.items[1].p95LatencyMs).toBeCloseTo(910);
+  expect((await (await fetch(`${base}/api/metrics/trends?projectId=${second.project.id}&${trendRange}`, { headers: adminHeaders })).json()).items[1].traceCount).toBe(1);
+  expect((await fetch(`${base}/api/metrics/trends?projectId=${first.project.id}&${trendRange.replace("bucketMinutes=5", "bucketMinutes=1")}`, { headers: adminHeaders })).status).toBe(400);
   const list = await (await fetch(`${base}/api/traces?projectId=${first.project.id}&limit=1`, { headers: adminHeaders })).json();
   expect(list.items).toHaveLength(1);
   expect(list.nextCursor).toBeTruthy();
@@ -61,7 +69,10 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect((await putFeedback(first.writeKey, feedbackUrl, { verdict: "bad", note: "User said no" })).status).toBe(204);
   expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).trace).toMatchObject({ feedbackVerdict: "bad", feedbackNote: "User said no" });
   expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&q=trace-2`, { headers: adminHeaders })).json()).items[0].feedbackVerdict).toBe("bad");
+  expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&feedback=bad&review=unreviewed`, { headers: adminHeaders })).json()).items.map((item: { traceId: string }) => item.traceId)).toEqual([reviewedId]);
+  expect((await (await fetch(`${base}/api/traces?projectId=${second.project.id}&feedback=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
   expect((await putFeedback(first.writeKey, feedbackUrl, { verdict: "good" })).status).toBe(204);
+  expect((await (await fetch(`${base}/api/traces?projectId=${first.project.id}&feedback=bad`, { headers: adminHeaders })).json()).items).toHaveLength(0);
   expect((await (await fetch(`${base}/api/traces/${reviewedId}?projectId=${first.project.id}`, { headers: adminHeaders })).json()).trace).toMatchObject({ feedbackVerdict: "good", feedbackNote: null });
   const reviewUrl = `${base}/api/traces/${reviewedId}/review?projectId=${first.project.id}`;
   const putReview = (url: string, body: unknown) => fetch(url, { method: "PUT", headers: { ...adminHeaders, "Content-Type": "application/json" }, body: JSON.stringify(body) });
