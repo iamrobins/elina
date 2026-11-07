@@ -1,0 +1,76 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3c95517f-7a68-402f-9403-40e2fd717ea7",
+  "prevIds": [
+    "0df7b2d3-8c6d-45c6-8db7-6b0fd4877e2f"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "api_keys",
+        "kind"
+      ],
+      "writes": [
+        "s|col|public.api_keys.kind",
+        "n|col|public.api_keys.kind",
+        "e|col|public.api_keys.kind"
+      ],
+      "reads": [
+        "n|tbl|public.api_keys",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "api_keys"
+      ],
+      "writes": [
+        "s|ck|public.api_keys.api_keys_kind_check",
+        "n|ck|public.api_keys.api_keys_kind_check",
+        "e|ck|public.api_keys.api_keys_kind_check",
+        "n|con|public.api_keys.api_keys_kind_check"
+      ],
+      "reads": [
+        "n|tbl|public.api_keys",
+        "n|sch|public",
+        "n|col|public.api_keys.kind"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "api_keys",
+        "name": "kind",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'write'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "api_keys",
+        "name": "api_keys_kind_check",
+        "value": "\"kind\" IN ('write', 'read')",
+        "entityType": "checks"
+      }
+    }
+  ]
+}

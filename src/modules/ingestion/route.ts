@@ -1,15 +1,15 @@
-import { createHash } from "node:crypto";
 import { create, fromBinary, fromJsonString, toBinary, toJsonString } from "@bufbuild/protobuf";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../../db/client";
-import { apiKeys, modelPrices, traces } from "../../db/schema";
+import { modelPrices, traces } from "../../db/schema";
 import { z } from "zod";
 import { ExportTraceServiceRequestSchema, ExportTraceServiceResponseSchema } from "../../gen/opentelemetry/proto/collector/trace/v1/trace_service_pb";
 import { StatusSchema } from "../../gen/google/rpc/status_pb";
 import { normalize } from "./normalize";
 import { priceSpan } from "./pricing";
 import { persist } from "./repository";
+import { projectForKey } from "../projects/keys";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -54,19 +54,11 @@ function replyStatus(code: number, message: string, http: number, json: boolean,
 export const ingestionRoutes = new Hono();
 const feedbackInput = z.object({ verdict: z.enum(["good", "bad"]), note: z.string().trim().max(2000).nullable().default(null) });
 
-async function projectForKey(authorization: string | undefined) {
-  const bearer = /^Bearer (\S+)$/.exec(authorization ?? "");
-  if (!bearer) return null;
-  const keyHash = createHash("sha256").update(bearer[1]).digest("hex");
-  const [key] = await db.select({ projectId: apiKeys.projectId }).from(apiKeys).where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)));
-  return key?.projectId ?? null;
-}
-
 ingestionRoutes.put("/v1/traces/:traceId/feedback", async (c) => {
   const traceId = c.req.param("traceId");
   if (!/^[a-f0-9]{32}$/.test(traceId)) return c.json({ error: "invalid trace ID" }, 400);
   let projectId: string | null;
-  try { projectId = await projectForKey(c.req.header("authorization")); }
+  try { projectId = await projectForKey(c.req.header("authorization"), "write"); }
   catch { return c.json({ error: "storage unavailable" }, 503); }
   if (!projectId) return c.json({ error: "unauthorized" }, 401);
   let body: unknown;
@@ -91,7 +83,7 @@ ingestionRoutes.post("/v1/traces", async (c) => {
   if (encoding && encoding !== "gzip") return replyStatus(3, "unsupported content encoding", 415, json);
   let projectId: string | null;
   try {
-    projectId = await projectForKey(c.req.header("authorization"));
+    projectId = await projectForKey(c.req.header("authorization"), "write");
   } catch {
     return replyStatus(14, "storage unavailable", 503, json, true);
   }

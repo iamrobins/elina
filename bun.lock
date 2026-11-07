@@ -6,6 +6,7 @@
       "name": "elina-server",
       "dependencies": {
         "@bufbuild/protobuf": "2.16.0",
+        "@modelcontextprotocol/server": "^2.1.0",
         "drizzle-orm": "^1.0.0-rc.5",
         "hono": "^4.10.0",
         "pg": "^8.23.1",
@@ -26,6 +27,10 @@
     "@bufbuild/protoc-gen-es": ["@bufbuild/protoc-gen-es@2.16.0", "", { "dependencies": { "@bufbuild/protobuf": "2.16.0", "@bufbuild/protoplugin": "2.16.0" }, "bin": { "protoc-gen-es": "bin/protoc-gen-es" } }, "sha512-LbPrEaGd7bOxKbJHllTR5439+PZjqd6fM7xyDZkDVtZ+Efzr7TMdMqShG9Qkf/nYVyiNS/SK5r9JhRaBTFkfZw=="],
 
     "@bufbuild/protoplugin": ["@bufbuild/protoplugin@2.16.0", "", { "dependencies": { "@bufbuild/protobuf": "2.16.0", "@typescript/vfs": "^1.6.2", "typescript": "5.4.5" } }, "sha512-3FdYJys34VhFnBQsjiV9wurBkX/DBACQAkAk+nCKdO1p8ROVNi7gmaRAcba+4qq8hQq8rYVukuutwvGCvd4kJA=="],
+
+    "@modelcontextprotocol/core": ["@modelcontextprotocol/core@2.4.0", "", { "dependencies": { "zod": "^4.2.0" } }, "sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q=="],
+
+    "@modelcontextprotocol/server": ["@modelcontextprotocol/server@2.4.0", "", { "dependencies": { "@modelcontextprotocol/core": "2.4.0", "zod": "^4.2.0" } }, "sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q=="],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

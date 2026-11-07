@@ -14,6 +14,7 @@ const uuid = z.uuid();
 const priceIdentity = z.object({ provider: z.string().trim().min(1).max(100), model: z.string().trim().min(1).max(200) });
 const rate = z.string().regex(/^(?:0|[1-9]\d{0,5})(?:\.\d{1,6})?$/);
 const priceInput = priceIdentity.extend({ inputPerMillion: rate, outputPerMillion: rate, cachedInputPerMillion: rate.nullable() });
+const keyInput = z.object({ kind: z.enum(["write", "read"]).default("write") });
 
 export const projectRoutes = new Hono();
 
@@ -58,7 +59,7 @@ projectRoutes.get("/projects/:id/keys", async (c) => {
   if (!uuid.safeParse(projectId).success) return c.json({ error: "invalid project ID" }, 400);
   const [project] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
   if (!project) return c.json({ error: "project not found" }, 404);
-  const items = await db.select({ id: apiKeys.id, keyPrefix: apiKeys.keyPrefix, createdAt: apiKeys.createdAt })
+  const items = await db.select({ id: apiKeys.id, keyPrefix: apiKeys.keyPrefix, kind: apiKeys.kind, createdAt: apiKeys.createdAt })
     .from(apiKeys).where(and(eq(apiKeys.projectId, projectId), isNull(apiKeys.revokedAt))).orderBy(apiKeys.createdAt);
   return c.json({ items });
 });
@@ -101,12 +102,16 @@ projectRoutes.delete("/projects/:id", async (c) => {
 projectRoutes.post("/projects/:id/keys", async (c) => {
   const projectId = c.req.param("id");
   if (!uuid.safeParse(projectId).success) return c.json({ error: "invalid project ID" }, 400);
+  let body: unknown;
+  try { const text = await c.req.text(); body = text ? JSON.parse(text) : {}; } catch { return c.json({ error: "invalid JSON" }, 400); }
+  const input = keyInput.safeParse(body);
+  if (!input.success) return c.json({ error: "invalid key kind" }, 400);
   const [project] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
   if (!project) return c.json({ error: "project not found" }, 404);
 
   const issued = issueKey();
-  const [row] = await db.insert(apiKeys).values({ projectId, keyHash: issued.keyHash, keyPrefix: issued.keyPrefix }).returning({ id: apiKeys.id });
-  return c.json({ id: row.id, writeKey: issued.key }, 201);
+  const [row] = await db.insert(apiKeys).values({ projectId, keyHash: issued.keyHash, keyPrefix: issued.keyPrefix, kind: input.data.kind }).returning({ id: apiKeys.id });
+  return c.json({ id: row.id, ...(input.data.kind === "read" ? { readKey: issued.key } : { writeKey: issued.key }) }, 201);
 });
 
 projectRoutes.delete("/keys/:id", async (c) => {

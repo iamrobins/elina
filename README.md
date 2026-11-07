@@ -11,8 +11,7 @@ Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSW
 - `POST /api/projects` with `{"name":"my-app","retentionDays":30}` returns the project and its write key once.
 - `GET /api/projects` lists projects.
 - `GET /api/prices/catalog` returns the version and model prices bundled with this build.
-- `POST /api/projects/:id/keys` issues another write key.
-- `DELETE /api/keys/:id` revokes a write key.
+- `POST /api/projects/:id/keys` issues another write key, or with `{"kind":"read"}` issues a project-scoped MCP read key. `GET /api/projects/:id/keys` shows each active key's kind; `DELETE /api/keys/:id` revokes either kind.
 - `GET /api/projects/:id/prices` lists project model prices. `PUT` to the same path with `provider`, exact `model`, `inputPerMillion`, `outputPerMillion`, and optional `cachedInputPerMillion` adds or updates one. `DELETE` with `provider` and `model` removes it. Rates are USD per million tokens and apply to new spans.
 
 Send OTLP/HTTP traces to `POST /v1/traces` with `Authorization: Bearer <writeKey>`. Protobuf and OTLP JSON, including gzip, are accepted. A 200 response follows a committed PostgreSQL transaction.
@@ -33,6 +32,12 @@ Reported USD cost attributes (`gen_ai.usage.cost_usd`, `elinaobs.cost.usd`, or `
 Retention runs at API startup and every 24 hours. It deletes traces older than each project's `retentionDays` in batches of 500; span rows cascade. A manual pass is `docker compose exec api bun src/db/retention.ts`. Database backups need a separate retention policy.
 
 Run `bun test` and `bun run typecheck` locally. With Compose running, set `$env:ELINA_BASE_URL='http://127.0.0.1:3000'` in PowerShell, then run `bun --env-file=.env test tests/api.test.ts`. The live test creates projects and traces in the local database.
+
+## MCP read access
+
+The existing API process serves Streamable HTTP at `http://127.0.0.1:3000/mcp`. Create an **MCP read key** in project Settings (or through the admin key endpoint), then configure an MCP client with that URL and `Authorization: Bearer <readKey>`. The tools are `get_health`, `list_traces`, and `get_trace`. Each tool is scoped to the key's project. Trace detail returns observation summaries, including error messages, but omits captured inputs, outputs, and raw attributes. Read keys cannot ingest traces or submit feedback. Revoke a key in Settings to end access.
+
+The default Compose deployment binds to loopback. Connecting a remote client such as Slackbot requires HTTPS hosting and compatible client authentication; this release does not expose a public MCP endpoint.
 
 ## Protocol generation
 

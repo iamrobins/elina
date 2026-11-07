@@ -58,6 +58,27 @@ test.skipIf(!base || !admin)("live API keeps metrics idempotent and project scop
   expect(otherTrace.items).toHaveLength(1);
   expect(otherTrace.items[0].traceId).toBe(Buffer.from([...traceId.slice(0, 15), 1]).toString("hex"));
   expect((await fetch(`${base}/api/traces/${Buffer.from([...traceId.slice(0, 15), 2]).toString("hex")}?projectId=${second.project.id}`, { headers: adminHeaders })).status).toBe(404);
+  const readKeyResponse = await fetch(`${base}/api/projects/${first.project.id}/keys`, { method: "POST", headers: { ...adminHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ kind: "read" }) });
+  expect(readKeyResponse.status).toBe(201);
+  const readKey: { id: string; readKey: string } = await readKeyResponse.json();
+  expect((await (await fetch(`${base}/api/projects/${first.project.id}/keys`, { headers: adminHeaders })).json()).items.find((item: { id: string }) => item.id === readKey.id).kind).toBe("read");
+  expect((await send(readKey.readKey, 5, 10)).status).toBe(401);
+  expect((await fetch(`${base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${first.writeKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) })).status).toBe(401);
+  const mcpCall = async (name: string, args: unknown) => {
+    const response = await fetch(`${base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${readKey.readKey}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) });
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    return JSON.parse(text.startsWith("event:") ? text.match(/^data: (.*)$/m)?.[1] ?? "" : text).result;
+  };
+  const mcpTraces = await mcpCall("list_traces", {});
+  expect(JSON.parse(mcpTraces.content[0].text).items.map((item: { traceId: string }) => item.traceId)).toEqual((await (await fetch(`${base}/api/traces?projectId=${first.project.id}`, { headers: adminHeaders })).json()).items.map((item: { traceId: string }) => item.traceId));
+  expect((await mcpCall("get_trace", { traceId: "f".repeat(32) })).isError).toBe(true);
+  const mcpTrace = await mcpCall("get_trace", { traceId: searched.items[0].traceId });
+  expect(JSON.parse(mcpTrace.content[0].text).trace.traceId).toBe(searched.items[0].traceId);
+  expect(JSON.stringify(mcpTrace)).not.toContain("attributes");
+  expect((await mcpCall("get_health", {})).content[0].text).toContain('"traceCount":3');
+  expect((await fetch(`${base}/api/keys/${readKey.id}`, { method: "DELETE", headers: adminHeaders })).status).toBe(204);
+  expect((await fetch(`${base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${readKey.readKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) })).status).toBe(401);
   const reviewedId = searched.items[0].traceId;
   const feedbackUrl = `${base}/v1/traces/${reviewedId}/feedback`;
   const putFeedback = (key: string, url: string, body: unknown) => fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });

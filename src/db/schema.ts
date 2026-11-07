@@ -1,7 +1,8 @@
 import {
-  bigint, char, doublePrecision, foreignKey, index, integer, jsonb, numeric,
+  bigint, char, check, doublePrecision, foreignKey, index, integer, jsonb, numeric,
   pgTable, primaryKey, smallint, text, timestamp, uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const time = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -17,9 +18,10 @@ export const apiKeys = pgTable("api_keys", {
   projectId: uuid("project_id").notNull().references(() => projects.id),
   keyHash: char("key_hash", { length: 64 }).notNull().unique(),
   keyPrefix: text("key_prefix").notNull(),
+  kind: text("kind", { enum: ["write", "read"] }).notNull().default("write"),
   createdAt: time("created_at").defaultNow().notNull(),
   revokedAt: time("revoked_at"),
-});
+}, (table) => [check("api_keys_kind_check", sql`${table.kind} IN ('write', 'read')`)]);
 
 export const modelPrices = pgTable("model_prices", {
   projectId: uuid("project_id").notNull().references(() => projects.id),

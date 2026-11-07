@@ -5,6 +5,7 @@ import { projectRoutes } from "./modules/projects/routes";
 import { ingestionRoutes } from "./modules/ingestion/route";
 import { traceRoutes } from "./modules/traces/routes";
 import { metricsRoutes } from "./modules/metrics/routes";
+import { mcpRoutes } from "./modules/mcp/route";
 
 export const app = new Hono();
 
@@ -23,3 +24,4 @@ app.route("/api", projectRoutes);
 app.route("/api", traceRoutes);
 app.route("/api", metricsRoutes);
 app.route("/", ingestionRoutes);
+app.route("/", mcpRoutes);
