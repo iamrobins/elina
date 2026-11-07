@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: elina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: elina
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elina -d elina"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["bun", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://elina:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/elina
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://elina:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/elina
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+      ATTRIBUTE_DENYLIST: ${ATTRIBUTE_DENYLIST:-}
+      PORT: 3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build: ../elina-web
+    environment:
+      ELINA_API_INTERNAL_URL: http://api:3000
+      ELINA_BACKEND_ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH:?Set DASHBOARD_PASSWORD_HASH}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      ELINA_DOMAIN: ${ELINA_DOMAIN:?Set ELINA_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+  backup:
+    image: postgres:17-alpine
+    user: "0:0"
+    environment:
+      PGHOST: postgres
+      PGUSER: elina
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      PGDATABASE: elina
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    volumes:
+      - ${BACKUP_DIR:?Set BACKUP_DIR}:/backups
+      - ./ops:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -maxdepth 1 -name 'elina-*.dump' -type f -mtime -2 -print -quit | grep -q ."]
+      interval: 1h
+      timeout: 10s
+      retries: 2
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

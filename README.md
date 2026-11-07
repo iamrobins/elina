@@ -2,6 +2,20 @@
 
 Bun/Hono trace receiver backed by PostgreSQL. This is an in-progress v0.1 backend.
 
+Licensed under MIT. See [LICENSE](LICENSE).
+
+## Get Elina
+
+Elina is a self-hosted app. The dashboard and server live in separate repositories; clone both into the same parent directory so Compose can build them:
+
+```sh
+git clone https://github.com/iamrobins/elina-server.git
+git clone https://github.com/iamrobins/elina-web.git
+cd elina-server
+```
+
+Run it on your machine with the local Compose file, or use the production file on a Linux host you control. `getelina.com` is the project website; it does not run your dashboard, API, or database.
+
 ## Local run
 
 Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSWORD` and `ADMIN_TOKEN` (at least 32 characters), and set `SESSION_SECRET` to 64 random hex characters. Generate `DASHBOARD_PASSWORD_HASH` with `bun -e "const c=require('node:crypto'); const s=c.randomBytes(16); console.log('scrypt:'+s.toString('hex')+':'+c.scryptSync('your-dashboard-password',s,64).toString('hex'))"`, replacing the sample password first. Then run `docker compose up -d --build` from WSL. Compose runs migrations before starting the API and frontend. PostgreSQL stays on the private Compose network; the API binds to `127.0.0.1:3000` and the dashboard to `127.0.0.1:3001`.
@@ -29,7 +43,30 @@ Admin trace reads require `projectId` even with the admin token:
 
 Reported USD cost attributes (`gen_ai.usage.cost_usd`, `elinaobs.cost.usd`, or `tinyobs.cost.usd`) take priority. Otherwise Elina estimates cost from provider token counts and an exact project price or its versioned built-in standard-price snapshot. The snapshot includes OpenAI (`gpt-6-luna`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-astra`), Gemini Developer API (`gemini-3-flash-preview`, `gemini-3.1-pro-preview`, `gemini-2.5-flash`), and Anthropic (`claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-opus-4-5-20251101`). Use `gen_ai.provider.name` values `openai`, `gcp.gemini`, or `anthropic` and the exact model ID. Rates come from the [OpenAI](https://developers.openai.com/api/docs/pricing), [Gemini](https://aistudio.google.com/docs/pricing), and [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) standard paid pricing pages. The snapshot is bundled with each server build; updating bundled rates requires a new build, while project overrides can be edited in Settings without one. Cached input is priced separately when reported. Unsupported models, nonstandard service tiers, long-context requests with different rates, and incomplete usage remain unknown. Token estimates exclude separately billed audio, tools, cache storage, and cloud platform premiums. Each stored span keeps its cost source; later price edits do not change existing spans. The first pricing migration backfills eligible existing spans once.
 
-Retention runs at API startup and every 24 hours. It deletes traces older than each project's `retentionDays` in batches of 500; span rows cascade. A manual pass is `docker compose exec api bun src/db/retention.ts`. Database backups need a separate retention policy.
+Retention runs at API startup and every 24 hours. It deletes traces older than each project's `retentionDays` in batches of 500; span rows cascade. A manual pass is `docker compose exec api bun src/db/retention.ts`. The local Compose file has no backup service; use the production file for scheduled backups.
+
+## Self-hosted production deployment
+
+Run the production Compose file on your Linux host with Docker Compose, your own DNS name pointing to that host, and inbound TCP ports 80 and 443 (plus UDP 443 if available). Copy `.env.example` to `.env`, replace every placeholder with independent secrets, and set `ELINA_DOMAIN` to your own hostname, `ACME_EMAIL` to your email, and `BACKUP_DIR` to an absolute path outside the repository. Generate the dashboard hash as described above. Keep `.env` and the backup directory readable only by the host administrator. Then run:
+
+```sh
+mkdir -p /opt/elina/backups
+chmod 700 /opt/elina/backups
+docker compose -f compose.prod.yaml up -d --build
+docker compose -f compose.prod.yaml ps
+```
+
+The proxy obtains HTTPS certificates for `ELINA_DOMAIN`. Only ports 80 and 443 are published. It forwards `/v1/traces`, feedback, and `/mcp` to the API, and the dashboard to the web service; the admin API and PostgreSQL stay on the private Compose network. Use `https://<your-domain>/v1/traces` as the Python SDK endpoint and `https://<your-domain>/mcp` for MCP read keys. This is one operator's installation: everyone with the dashboard password can access every project. Do not use it as a hosted multi-customer service.
+
+The backup service writes a PostgreSQL custom archive immediately, then every 24 hours. It keeps seven days of local archives and reports unhealthy if none is recent. Monitor `docker compose -f compose.prod.yaml ps` and `docker compose -f compose.prod.yaml logs backup`. **Copy archives to a separate machine or storage account**; a local directory does not protect against host loss. Backups contain trace data and key hashes, so encrypt off-host copies and limit access. Before every upgrade, verify a fresh archive exists. To check that the latest archive restores into a temporary database without changing the live one (replace `/opt/elina/backups` if `BACKUP_DIR` differs):
+
+```sh
+archive=$(find /opt/elina/backups -maxdepth 1 -name 'elina-*.dump' -type f | sort | tail -1)
+test -n "$archive"
+docker compose -f compose.prod.yaml run --rm --no-deps --entrypoint sh backup /scripts/restore-check.sh "/backups/$(basename "$archive")"
+```
+
+To recover after database loss, use a fresh host or an **empty** PostgreSQL volume with the same `.env` secrets and the archive in `BACKUP_DIR`. Start only PostgreSQL with `docker compose -f compose.prod.yaml up -d postgres`. Restore with `docker compose -f compose.prod.yaml run --rm --no-deps --entrypoint pg_restore backup --exit-on-error --no-owner --dbname=elina /backups/<archive>`, then start the full stack with `docker compose -f compose.prod.yaml up -d --build`. Do not restore into a populated database. Keep the original archive until the dashboard and a known trace have been checked. If the host or its secrets were compromised, rotate the admin token, dashboard password, and project keys after recovery.
 
 Run `bun test` and `bun run typecheck` locally. With Compose running, set `$env:ELINA_BASE_URL='http://127.0.0.1:3000'` in PowerShell, then run `bun --env-file=.env test tests/api.test.ts`. The live test creates projects and traces in the local database.
 
