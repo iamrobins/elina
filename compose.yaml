@@ -15,6 +15,7 @@ services:
     restart: unless-stopped
 
   migrate:
+    image: ghcr.io/iamrobins/elina:latest
     build: .
     command: ["bun", "run", "db:migrate"]
     environment:
@@ -25,7 +26,7 @@ services:
     restart: "no"
 
   api:
-    build: .
+    image: ghcr.io/iamrobins/elina:latest
     environment:
       DATABASE_URL: postgres://elina:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/elina
       ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
@@ -39,7 +40,8 @@ services:
     restart: unless-stopped
 
   web:
-    build: ../elina-web
+    image: ghcr.io/iamrobins/elina:latest
+    command: ["node", "elina-web/node_modules/next/dist/bin/next", "start", "elina-web", "-p", "3001"]
     environment:
       ELINA_API_INTERNAL_URL: http://api:3000
       ELINA_BACKEND_ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}

@@ -1,3 +1,5 @@
 node_modules/
 .env
 coverage/
+elina-web/node_modules/
+elina-web/.next/

@@ -1,4 +1,4 @@
-# Elina server
+# Elina
 
 Bun/Hono trace receiver backed by PostgreSQL. This is an in-progress v0.1 backend.
 
@@ -6,19 +6,18 @@ Licensed under MIT. See [LICENSE](LICENSE).
 
 ## Get Elina
 
-Elina is a self-hosted app. The dashboard and server live in separate repositories; clone both into the same parent directory so Compose can build them:
+Elina is a self-hosted app. The server and dashboard are in one repository. Clone it:
 
 ```sh
-git clone https://github.com/iamrobins/elina-server.git
-git clone https://github.com/iamrobins/elina-web.git
-cd elina-server
+git clone https://github.com/iamrobins/elina.git
+cd elina
 ```
 
-Run it on your machine with the local Compose file, or use the production file on a Linux host you control. `getelina.com` is the project website; it does not run your dashboard, API, or database.
+Run it on your machine with the local Compose file, or use the production file on a Linux host you control. Both files use the single `ghcr.io/iamrobins/elina:latest` image; Compose can build it from this repository, and Docker can pull the published image directly. `getelina.com` is the project website; it does not run your dashboard, API, or database.
 
 ## Local run
 
-Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSWORD` and `ADMIN_TOKEN` (at least 32 characters), and set `SESSION_SECRET` to 64 random hex characters. Generate `DASHBOARD_PASSWORD_HASH` with `bun -e "const c=require('node:crypto'); const s=c.randomBytes(16); console.log('scrypt:'+s.toString('hex')+':'+c.scryptSync('your-dashboard-password',s,64).toString('hex'))"`, replacing the sample password first. Then run `docker compose up -d --build` from WSL. Compose runs migrations before starting the API and frontend. PostgreSQL stays on the private Compose network; the API binds to `127.0.0.1:3000` and the dashboard to `127.0.0.1:3001`.
+Copy `.env.example` to `.env`, set independent random values for `POSTGRES_PASSWORD` and `ADMIN_TOKEN` (at least 32 characters), and set `SESSION_SECRET` to 64 random hex characters. Generate `DASHBOARD_PASSWORD_HASH` with `bun -e "const c=require('node:crypto'); const s=c.randomBytes(16); console.log('scrypt:'+s.toString('hex')+':'+c.scryptSync('your-dashboard-password',s,64).toString('hex'))"`, replacing the sample password first. Then run `docker compose up -d --build` from WSL. Compose builds one Elina image and runs migrations before starting the API and dashboard containers. PostgreSQL stays on the private Compose network; the API binds to `127.0.0.1:3000` and the dashboard to `127.0.0.1:3001`.
 
 `GET /health/live` checks the process and `GET /health/ready` checks PostgreSQL. Admin routes use `Authorization: Bearer <ADMIN_TOKEN>`:
 
@@ -47,7 +46,7 @@ Retention runs at API startup and every 24 hours. It deletes traces older than e
 
 ## Self-hosted production deployment
 
-Run the production Compose file on your Linux host with Docker Compose, your own DNS name pointing to that host, and inbound TCP ports 80 and 443 (plus UDP 443 if available). Copy `.env.example` to `.env`, replace every placeholder with independent secrets, and set `ELINA_DOMAIN` to your own hostname, `ACME_EMAIL` to your email, and `BACKUP_DIR` to an absolute path outside the repository. Generate the dashboard hash as described above. Keep `.env` and the backup directory readable only by the host administrator. Then run:
+Run the production Compose file from this repository on your Linux host with Docker Compose, your own DNS name pointing to that host, and inbound TCP ports 80 and 443 (plus UDP 443 if available). Copy `.env.example` to `.env`, replace every placeholder with independent secrets, and set `ELINA_DOMAIN` to your own hostname, `ACME_EMAIL` to your email, and `BACKUP_DIR` to an absolute path outside the repository. Generate the dashboard hash as described above. Keep `.env` and the backup directory readable only by the host administrator. Then run:
 
 ```sh
 mkdir -p /opt/elina/backups
