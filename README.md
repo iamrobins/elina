@@ -13,7 +13,7 @@ git clone https://github.com/iamrobins/elina.git
 cd elina
 ```
 
-Run it on your machine with the local Compose file, or use the production file on a Linux host you control. Both files use the single `ghcr.io/iamrobins/elina:latest` image; Compose can build it from this repository. Once the image workflow has published it, Docker can pull the same image directly. `getelina.com` is the project website; it does not run your dashboard, API, or database.
+Run it on your machine with the local Compose file, or use the production file on a Linux host you control. Both files use the single `ghcr.io/iamrobins/elina:latest` image; Compose can build it from this repository. Once the image workflow has published it and the package is public, Docker can pull the same image directly. `getelina.com` is the project website; it does not run your dashboard, API, or database.
 
 ## Local run
 
